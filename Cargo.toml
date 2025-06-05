@@ -8,9 +8,10 @@
     ]
 
     [workspace.package]
+        name = "bgs-reference"
+        edition = "2024"
         authors = ["Maxine Zick <maxine@pnk.dev>"]
         version = "0.1.0"
-        edition = "2024"
         keywords = ["bitgrid", "browser", "teal", "wasm", "javascript"]
         categories = ["wasm", "gui", "api-bindings", "compilers", "embedded"]
         resolver = "3"
