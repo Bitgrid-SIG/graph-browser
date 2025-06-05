@@ -1,0 +1,17 @@
+[package]
+    name = "tl2wasm"
+    version = "0.1.0"
+    edition.workspace = true
+    resolver = "3"
+
+[lib]
+    crate-type = ["cdylib"]
+
+[dependencies]
+    bitmask-enum = "2.2.5"
+    ebnf = "0.1.4"
+    pest = "2.8.0"
+    pest_derive = "2.8.0"
+    wasm-bindgen = "0.2.100"
+    wasm-encoder = "0.233.0"
+    wasm-opcodes = "0.115.1"

@@ -1,0 +1,218 @@
+
+chunk = { block ~ EOI }
+
+block = { stat* ~ retstat? }
+
+stat = {
+      ";"
+    | ( varlist ~ "=" ~ explist )
+    | label
+    | "break"
+    | ( "goto" ~ ident )
+    | ( "do" ~ block ~ "end" )
+    | ( "while" ~ expchain ~ "do" ~ block ~ "end" )
+    | ( "repeat" ~ block ~ "until" ~ expchain )
+    | ( "if" ~ expchain ~ "then" ~ block
+          ~ ("elseif" ~ expchain ~ "then" ~ block)?
+          ~ ("else" ~ block)?
+      ~ "end"
+    )
+    | ( "for" ~ ident ~ "=" ~ expchain ~ "," ~ expchain ~ ("," ~ expchain)? ~ "do" ~ block ~ "end" )
+    | ( "for" ~ namelist ~ "in" ~ explist ~ "do" ~ block ~ "end" )
+    | ( "function" ~ funcname ~ funcbody )
+    | ( "local" ~ attnamelist ~ (":" ~ typelist)? ~ ("=" ~ explist)? )
+    | ( "local" ~ "function" ~ ident ~ funcbody )
+    | ( "local" ~ "record" ~ ident ~ recordbody )
+    | ( "local" ~ "interface" ~ ident ~ recordbody )
+    | ( "local" ~ "enum" ~ ident ~ enumbody )
+    | ( "local" ~ "type" ~ ident ~ "=" ~ newtype )
+    | ( "global" ~ attnamelist ~ ":" ~ typelist ~ ("=" ~ explist)? )
+    | ( "global" ~ attnamelist ~ "=" ~ explist )
+    | ( "global" ~ "function" ~ ident ~ funcbody )
+    | ( "global" ~ "record" ~ ident ~ recordbody )
+    | ( "global" ~ "interface" ~ ident ~ recordbody )
+    | ( "global" ~ "enum" ~ ident ~ enumbody )
+    | ( "global" ~ "type" ~ ident ~ ("=" ~ newtype) )
+}
+
+attnamelist = { ident ~ attrib? ~ ("," ~ ident ~ attrib?)* }
+
+attrib = { "<" ~ ident ~ ">" }
+
+retstat = { "return" ~ explist? ~ ";"? }
+
+label = { "::" ~ ident ~ "::" }
+
+funcname = {
+    ( ident ~ ("." ~ ident)* ~ ":" ~ ident )
+  | ( ident ~ ("." ~ ident)* ~ "." ~ ident )
+}
+
+namelist = { ident ~ ("," ~ ident)* }
+
+explist = { expchain ~ ("," ~ expchain)* }
+
+expchain = { exp ~ (binop ~ exp)* }
+
+exp = {
+    ( unop ~ exp )
+  | ( term ~ "as" ~ type )
+  | ( ident ~ "is" ~ type )
+  | ( term ~ "as" ~ "(" ~ typelist ~ ")" )
+  | term
+}
+
+term = {
+    "nil" | "true" | "false"
+  | number | string | "..."
+  | functiondef | prefixexp | tableconstructor
+}
+
+varlist = { var ~ ("," ~ var)* }
+
+var = {
+    ident
+  | ( prefixexp ~ "[" ~ expchain ~ "]" )
+  | ( prefixexp ~ "." ~ ident )
+}
+
+prefixexp = { "(" ~ expchain ~ ")" ~ (
+      args
+    | (":" ~ ident ~ args)
+  )
+}
+
+args = {
+    ( "(" ~ explist? ~ ")" )
+  | tableconstructor
+  | string
+}
+
+functiondef = { "function" ~ funcbody }
+
+funcbody = { typeargs? ~ "(" ~ parlist? ~ ")" ~ (":" ~ retlist)? ~ block ~ "end" }
+
+parlist = {
+    ( parnamelist ~ ("," ~ "..." ~ (":" ~ type)?)? )
+  | ( "..." ~ (":" ~ type)? )
+}
+
+tableconstructor = { "{" ~ fieldlist* ~ "}" }
+
+fieldlist = { field ~ ( fieldsep ~ field )* ~ fieldsep? }
+
+field = {
+    ( "[" ~ expchain ~ "]" ~ "=" ~ expchain )
+  | ( ident ~ (":" ~ type)? ~ "=" ~ expchain )
+  | expchain
+}
+
+fieldsep = { "," | ";" }
+
+binop = {
+    "+"   | "-"   | "*" | "/"  | "//" | "^"  | "%"
+  | "&"   | "~"   | "|" | ">>" | "<<" | ".."
+  | "<"   | "<="  | ">" | ">=" | "==" | "~="
+  | "and" | "or"
+}
+
+unop = { "-" | "not" | "#" | "~" }
+
+type = {
+    ( "(" ~ type ~ ")" )
+  | ( basetype ~ ("|" ~ basetype)* )
+}
+
+nominal = { ident ~ ("." ~ ident)* ~ typeargs? }
+
+basetype = {
+    "string"
+  | "boolean"
+  | "nil"
+  | "number"
+
+  | ( "{" ~ type ~ ("," ~ type)* ~ "}" )
+  | ( "{" ~ type ~ ":" ~ type ~ "}" )
+
+  | functiontype
+  | nominal
+}
+
+typelist = { type ~ ("," ~ type)* }
+
+retlist = {
+    ( "(" ~ typelist? ~ "..."? ~ ")" )
+  | ( typelist ~ "..."? )
+}
+
+typeargs = { "<" ~ ident ~ ("," ~ ident)* ~ ">" }
+
+newtype = {
+    ( "record" ~ recordbody )
+  | ( "enum" ~ enumbody )
+  | type
+  | ( "require" ~ "(" ~ string ~ ")" ~ ("." ~ ident)* )
+}
+
+interfacelist = {
+    ( nominal ~ ("," ~ nominal)* )
+  | ( "{" ~ type ~ "}" ~ ("," ~ nominal)* )
+}
+
+recordbody = { typeargs? ~ ("is" ~ interfacelist)? ~ ("where" ~ expchain)? ~ recordentry* ~ "end" }
+
+recordentry = {
+    "userdata"
+  | ( "type" ~ ident ~ "=" ~ newtype )
+  | ( "metamethod"? ~ recordkey ~ ":" ~ type )
+  | ( "record" ~ ident ~ recordbody )
+  | ( "enum" ~ ident ~ enumbody )
+}
+
+recordkey = { ident | ( "[" ~ string ~ "]" ) }
+
+enumbody = { string* ~ "end" }
+
+functiontype = { "function" ~ typeargs? ~ "(" ~ partypelist ~ ")" ~ (":" ~ retlist)? }
+
+partypelist = { partype ~ ("," ~ partype)* }
+
+partype = {
+    ( ident ~ "?"? ~ ":" ~ type )
+  | ( "?"? ~ type )
+}
+
+parnamelist = { parname ~ ("," ~ parname)* }
+
+parname = { ident ~ "?"? ~ (":" ~ type)? }
+
+string = @{ quote_s | quote_d }
+
+quote_s = { "'" ~ (quote_s_raw | escape)* ~ "'" }
+quote_s_raw = { (!("\\" | "'") ~ ANY)+ }
+
+quote_d = { "\"" ~ (quote_d_raw | escape)* ~ "\"" }
+quote_d_raw = { (!("\\" | "\"") ~ ANY)+ }
+
+// based on references from:
+// https://github.com/pest-parser/pest-parser.github.io/blob/master/book/examples/rust/literals.html
+escape     = { "\\" ~ (predefined | byte | unicode) }
+predefined = { "n" | "r" | "t" | "\\" | "0" | "\"" | "'" }
+byte       = _{ "x" ~ ASCII_HEX_DIGIT{2} }
+unicode    = _{ "u" ~ "{" ~ ASCII_HEX_DIGIT{1, 6} ~ "}" }
+
+number = {
+    ( "0x" ~ ASCII_HEX_DIGIT+ ~ ("." ~ ASCII_HEX_DIGIT*)? ~ (^"p" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
+  | ( ^"0x" ~ (ASCII_HEX_DIGIT* ~ ".")? ~ ASCII_HEX_DIGIT+ ~ (^"p" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
+  | ( "0b" ~ ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})* ~ ("." ~ (ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})*)?)? )
+  | ( (ASCII_DIGIT* ~ ".")? ~ ASCII_DIGIT+ ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
+  | ( ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
+}
+
+ident = {
+    ( ASCII_ALPHA | "_" )
+  ~ ( ASCII_ALPHANUMERIC | "_" )*
+}
+
+WHITESPACE = _{ " " | "\t" | NEWLINE | "\u{000C}" | "\u{000B}" }
+COMMENT = _{ ("--[[" ~ (!"--]]" ~ ANY)* ~ "--]]") | ("--" ~ (!NEWLINE ~ ANY)* ~ NEWLINE) }

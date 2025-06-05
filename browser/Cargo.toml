@@ -1,0 +1,13 @@
+[package]
+    name = "graph-browser"
+    version = "0.1.0"
+    edition.workspace = true
+    resolver = "3"
+
+[features]
+    default = []
+    www = ["dep:rquickjs"]
+
+[dependencies]
+    tl2wasm = { workspace = true }
+    rquickjs = { version = "0.9.0", optional = true }
