@@ -2,7 +2,6 @@
     name = "tl2wasm"
     version = "0.1.0"
     edition.workspace = true
-    resolver = "3"
 
 [lib]
     crate-type = ["cdylib"]

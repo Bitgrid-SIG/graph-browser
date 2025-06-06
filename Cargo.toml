@@ -5,21 +5,33 @@
     members = [
         "browser",
         "tl2wasm",
+        "graph-ui",
+        "graph-engine",
     ]
 
     [workspace.package]
-        name = "bgs-reference"
         edition = "2024"
         authors = ["Maxine Zick <maxine@pnk.dev>"]
         version = "0.1.0"
-        keywords = ["bitgrid", "browser", "teal", "wasm", "javascript"]
+        readme = "README.md"
+        keywords = ["bitgrid", "lua", "teal", "wasm", "typescript"]
         categories = ["wasm", "gui", "api-bindings", "compilers", "embedded"]
-        resolver = "3"
+
+    [workspace.dependencies.sdl3]
+        version = "0.14.29"
+
+    [workspace.dependencies.imgui]
+        version = "0.12.0"
 
     [workspace.dependencies.tl2wasm]
-        name = "tl2wasm"
-        version = "0.1.0"
         path = "tl2wasm"
+
+    [workspace.dependencies.graph-ui]
+        path = "graph-ui"
+        package = "sdl3-dearimgui"
+
+    [workspace.dependencies.graph-engine]
+        path = "graph-engine"
 
 [alias]
     run = "run -p browser"

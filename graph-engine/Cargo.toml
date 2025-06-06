@@ -1,5 +1,5 @@
 [package]
-    name = "graph-browser"
+    name = "graph-engine"
     edition.workspace = true
     authors.workspace = true
     version.workspace = true
@@ -7,11 +7,8 @@
     keywords.workspace = true
     categories.workspace = true
 
-[features]
-    default = []
-
 [dependencies]
-    graph-engine.workspace = true
     graph-ui.workspace = true
     sdl3.workspace = true
     imgui.workspace = true
+

@@ -25,14 +25,14 @@ stat = {
     | ( "local" ~ "record" ~ ident ~ recordbody )
     | ( "local" ~ "interface" ~ ident ~ recordbody )
     | ( "local" ~ "enum" ~ ident ~ enumbody )
-    | ( "local" ~ "type" ~ ident ~ "=" ~ newtype )
+    | ( "local" ~ "type" ~ ident ~ "=" ~ typedef )
     | ( "global" ~ attnamelist ~ ":" ~ typelist ~ ("=" ~ explist)? )
     | ( "global" ~ attnamelist ~ "=" ~ explist )
     | ( "global" ~ "function" ~ ident ~ funcbody )
     | ( "global" ~ "record" ~ ident ~ recordbody )
     | ( "global" ~ "interface" ~ ident ~ recordbody )
     | ( "global" ~ "enum" ~ ident ~ enumbody )
-    | ( "global" ~ "type" ~ ident ~ ("=" ~ newtype) )
+    | ( "global" ~ "type" ~ ident ~ ("=" ~ typedef) )
 }
 
 attnamelist = { ident ~ attrib? ~ ("," ~ ident ~ attrib?)* }
@@ -125,18 +125,31 @@ type = {
 
 nominal = { ident ~ ("." ~ ident)* ~ typeargs? }
 
-basetype = {
+basetype = { primitive | nominal | anytype }
+
+primitive = {
     "string"
   | "boolean"
   | "nil"
+  
   | "number"
+  | "f64"
+  | "f32"
+  | "f16" | "bf16"
 
-  | ( "{" ~ type ~ ("," ~ type)* ~ "}" )
-  | ( "{" ~ type ~ ":" ~ type ~ "}" )
+  | "integer"
+  | "u8"  | "i8"
+  | "u16" | "i16"
+  | "u32" | "i32"
+  | "u64" | "i64"
 
+  | arraytype
+  | maptype
   | functiontype
-  | nominal
 }
+arraytype = { "{" ~ type ~ ("," ~ type)* ~ "}" }
+maptype = { "{" ~ type ~ ":" ~ type ~ "}" }
+anytype = { "any" }
 
 typelist = { type ~ ("," ~ type)* }
 
@@ -147,7 +160,7 @@ retlist = {
 
 typeargs = { "<" ~ ident ~ ("," ~ ident)* ~ ">" }
 
-newtype = {
+typedef = {
     ( "record" ~ recordbody )
   | ( "enum" ~ enumbody )
   | type
@@ -163,7 +176,7 @@ recordbody = { typeargs? ~ ("is" ~ interfacelist)? ~ ("where" ~ expchain)? ~ rec
 
 recordentry = {
     "userdata"
-  | ( "type" ~ ident ~ "=" ~ newtype )
+  | ( "type" ~ ident ~ "=" ~ typedef )
   | ( "metamethod"? ~ recordkey ~ ":" ~ type )
   | ( "record" ~ ident ~ recordbody )
   | ( "enum" ~ ident ~ enumbody )
@@ -188,23 +201,27 @@ parname = { ident ~ "?"? ~ (":" ~ type)? }
 
 string = @{ quote_s | quote_d }
 
-quote_s = { "'" ~ (quote_s_raw | escape)* ~ "'" }
+quote_s = { "'" ~ (quote_s_raw | quote_escape)* ~ "'" }
 quote_s_raw = { (!("\\" | "'") ~ ANY)+ }
 
-quote_d = { "\"" ~ (quote_d_raw | escape)* ~ "\"" }
+quote_d = { "\"" ~ (quote_d_raw | quote_escape)* ~ "\"" }
 quote_d_raw = { (!("\\" | "\"") ~ ANY)+ }
 
 // based on references from:
 // https://github.com/pest-parser/pest-parser.github.io/blob/master/book/examples/rust/literals.html
-escape     = { "\\" ~ (predefined | byte | unicode) }
-predefined = { "n" | "r" | "t" | "\\" | "0" | "\"" | "'" }
-byte       = _{ "x" ~ ASCII_HEX_DIGIT{2} }
-unicode    = _{ "u" ~ "{" ~ ASCII_HEX_DIGIT{1, 6} ~ "}" }
+quote_escape  =  { "\\" ~ (predefined | byte | unicode) }
+predefined    = _{ "n" | "r" | "t" | "\\" | "0" | "\"" | "'" }
+byte          =  { "x" ~ ASCII_HEX_DIGIT{2} }
+unicode       =  { "u" ~ "{" ~ ASCII_HEX_DIGIT{1,6} ~ "}" }
 
-number = {
-    ( "0x" ~ ASCII_HEX_DIGIT+ ~ ("." ~ ASCII_HEX_DIGIT*)? ~ (^"p" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
-  | ( ^"0x" ~ (ASCII_HEX_DIGIT* ~ ".")? ~ ASCII_HEX_DIGIT+ ~ (^"p" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
-  | ( "0b" ~ ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})* ~ ("." ~ (ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})*)?)? )
+number = @{
+  ( ^"0x" ~ (
+        ( ASCII_HEX_DIGIT+ ~ ("." ~ ASCII_HEX_DIGIT*)? )
+      | ( (ASCII_HEX_DIGIT* ~ ".")? ~ ASCII_HEX_DIGIT+ )
+    )
+    ~ ( ^"p" ~ ("+" | "-")? ~ ASCII_DIGIT+ )?
+  )
+  | ( ^"0b" ~ ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})* ~ ("." ~ (ASCII_BIN_DIGIT{1,4} ~ ("_" ~ ASCII_BIN_DIGIT{4})*)?)? )
   | ( (ASCII_DIGIT* ~ ".")? ~ ASCII_DIGIT+ ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
   | ( ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)? )
 }
