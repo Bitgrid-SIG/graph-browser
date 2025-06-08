@@ -4,7 +4,7 @@
 [workspace]
     members = [
         "browser",
-        "tl2wasm",
+        # "tl2wasm",
         "graph-engine",
         "graph-common",
     ]

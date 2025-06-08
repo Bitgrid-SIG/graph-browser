@@ -19,9 +19,9 @@ fn main() {
         .build()
         .unwrap();
 
-    // let gl_context = window.gl_create_context().unwrap();
-    // window.gl_make_current(&gl_context).unwrap();
-    // vid.gl_set_swap_interval(1).unwrap();
+    let gl_context = window.gl_create_context().unwrap();
+    window.gl_make_current(&gl_context).unwrap();
+    vid.gl_set_swap_interval(1).unwrap();
 
     window.new_ui()
         .platform("imgui_impl_sdl3")
@@ -42,8 +42,8 @@ fn main() {
             gui.show_demo_window(&mut true);
 
             gui.button("test");
-            ui_frame.end();
         }
+        ui_frame.end();
 
         window.gl_swap_window();
     }
