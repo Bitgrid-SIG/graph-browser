@@ -2,6 +2,8 @@
     incremental = true
 
 [workspace]
+    resolver = "3"
+
     members = [
         "browser",
         # "tl2wasm",
