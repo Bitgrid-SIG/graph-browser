@@ -8,7 +8,5 @@
     categories.workspace = true
 
 [dependencies]
-    graph-ui.workspace = true
-    sdl3.workspace = true
-    imgui.workspace = true
+    common.workspace = true
 

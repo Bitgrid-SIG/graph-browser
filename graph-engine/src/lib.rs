@@ -1,14 +1,8 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use common::renderer::sdl3;
+use common::renderer::imgui;
+use common::renderer::imgui::renderers::glow;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod subsystems;
+
+pub use common::renderer;

@@ -11,7 +11,5 @@
     default = []
 
 [dependencies]
+    common.workspace = true
     graph-engine.workspace = true
-    graph-ui.workspace = true
-    sdl3.workspace = true
-    imgui.workspace = true
