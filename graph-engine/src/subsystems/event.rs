@@ -6,13 +6,12 @@ use common::renderer::SDL;
 #[must_use = "Iterators are lazy and do nothing unless consumed"]
 pub struct GraphEventIterator<'a> {
     window: Option<&'a super::window::GraphWindow>,
-    pump: EventPump,
+    pump: &'a mut EventPump,
 }
 
 impl<'a> GraphEventIterator<'a> {
     pub fn new(window: &'a super::window::GraphWindow) -> Self {
-        let pump = SDL.event_pump().unwrap();
-        Self{ window: Some(window), pump }
+        Self{ window: Some(window), pump: SDL.event_pump.use_mut() }
     }
 }
 
@@ -25,7 +24,7 @@ impl<'a> Iterator for GraphEventIterator<'a> {
         } else {
             if let Some(window) = self.window.take() {
                 let mut ui = window.get_ui().unwrap();
-                ui.prepare(window, &common::renderer::SDL.event_pump().unwrap());
+                ui.prepare(window, &self.pump);
             }
             None
         }

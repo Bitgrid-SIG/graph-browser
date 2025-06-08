@@ -6,22 +6,47 @@ use std::cell::{RefCell, RefMut};
 use super::ui::{UiFrameGuard, GraphUiBuilder, GraphUi};
 use crate::sdl3::video::Window;
 
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum RenderBackend {
+    None,
+    OpenGL,
+    Vulkan,
+    Metal,
+    CPU,
+}
+
 pub struct GraphWindow {
     inner: Window,
     gui: RefCell<Option<GraphUi>>,
 }
 
-pub struct GraphWindowBuilder(crate::sdl3::video::WindowBuilder);
+pub struct GraphWindowBuilder(crate::sdl3::video::WindowBuilder, RenderBackend);
 
 impl GraphWindowBuilder {
     fn new(title: &str, width: u32, height: u32) -> Self {
         let vid = SDL.vid.borrow();
-        Self(crate::sdl3::video::WindowBuilder::new(&vid, title, width, height))
+        Self(crate::sdl3::video::WindowBuilder::new(&vid, title, width, height), RenderBackend::None)
     }
 
     pub fn build(self) -> Result<GraphWindow, crate::sdl3::video::WindowBuildError> {
+        let inner = self.0.build()?;
+
+        // match self.1 {
+        //     RenderBackend::None => {
+        //         panic!("No render backend was set!");
+        //     },
+        //     RenderBackend::OpenGL => {
+        //         let gl_context = inner.gl_create_context().unwrap();
+        //         inner.gl_make_current(&gl_context).unwrap();
+        //         inner.subsystem().gl_set_swap_interval(1).unwrap();
+        //         println!("Initializing OpenGL");
+        //     }
+        //     _ => panic!("Backend '{:?}' is not supported", self.1)
+        // }
+
         Ok(GraphWindow{
-            inner: self.0.build()?,
+            inner,
             gui: RefCell::new(None),
         })
     }
@@ -60,12 +85,14 @@ impl GraphWindowBuilder {
     /// Sets the window to be usable with an OpenGL context
     pub fn opengl(mut self) -> GraphWindowBuilder {
         self.0.opengl();
+        self.1 = RenderBackend::OpenGL;
         self
     }
 
     /// Sets the window to be usable with a Vulkan instance
     pub fn vulkan(mut self) -> GraphWindowBuilder {
         self.0.vulkan();
+        self.1 = RenderBackend::Vulkan;
         self
     }
 

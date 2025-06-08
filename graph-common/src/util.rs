@@ -33,15 +33,53 @@ impl<T> LazyInit<T> {
         }
     }
 
-    pub fn get(&self) -> Option<Ref<T>> {
+    pub fn borrow(&self) -> Option<Ref<T>> {
         self.init();
         Ref::filter_map(self.0.borrow(), |o| o.as_ref()).ok()
     }
 
-    pub fn get_mut(&mut self) -> Option<RefMut<T>> {
+    pub fn borrow_mut(&mut self) -> Option<RefMut<T>> {
         self.init();
         RefMut::filter_map(self.0.borrow_mut(), |o| o.as_mut()).ok()
     }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.init();
+        self.0.get_mut().as_mut().unwrap()
+    }
+
+    pub fn r#use(&self) -> &T {
+        self.init();
+        // if contents cannot be safely borrowed, panic.
+        drop(self.0.try_borrow().unwrap());
+        // guaranteed to be safe because if we can get the pointer
+        // in the first place, then it must exist. So immediately
+        // dereferencing the pointer is always safe.
+        let inner = unsafe { &*self.0.as_ptr() };
+        inner.as_ref().unwrap()
+    }
+
+    pub fn use_mut(&self) -> &mut T {
+        self.init();
+        // if contents cannot be safely mutably borrowed, panic.
+        drop(self.0.try_borrow_mut().unwrap());
+        // guaranteed to be safe because if we can get the pointer
+        // in the first place, then it must exist. So immediately
+        // dereferencing the pointer is always safe.
+        let inner = unsafe { &mut *self.0.as_ptr() };
+        inner.as_mut().unwrap()
+    }
+
+    pub fn take(&mut self) -> Option<T> {
+        self.0.get_mut().take()
+    }
+
+    pub fn swap(&mut self, mut new: T) -> Option<T> {
+        let result = &mut *self.borrow_mut().unwrap();
+        std::mem::swap(result, &mut new);
+        Some(new)
+    }
+
 }
 
 impl<C: ClipboardBackend> ImguiBuilder<C> {
@@ -106,3 +144,18 @@ impl<C: ClipboardBackend> ImguiBuilder<C> {
     }
 }
 
+impl<T> std::ops::Deref for LazyInit<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.init();
+        self.r#use()
+    }
+}
+
+impl<T> std::ops::DerefMut for LazyInit<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.init();
+        self.get_mut()
+    }
+}

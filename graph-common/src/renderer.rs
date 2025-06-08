@@ -33,6 +33,8 @@ pub mod graph {
         let sensor = LazyInit::new(|| SDL.core.borrow().sensor().unwrap());
         let haptic = LazyInit::new(|| SDL.core.borrow().haptic().unwrap());
 
+        let event_pump = LazyInit::new(|| SDL.core.borrow().event_pump().unwrap());
+
         SDLContext{
             core,
     
@@ -44,6 +46,8 @@ pub mod graph {
             joystick,
             sensor,
             haptic,
+
+            event_pump,
         }
     });
     
@@ -59,12 +63,8 @@ pub mod graph {
         pub joystick:   LazyInit<sdl3::JoystickSubsystem>,
         pub sensor:     LazyInit<sdl3::SensorSubsystem>,
         pub haptic:     LazyInit<sdl3::HapticSubsystem>,
-    }
 
-    impl SDLContext {
-        pub fn event_pump(&self) -> Result<sdl3::EventPump, sdl3::Error> {
-            self.core.borrow().event_pump()
-        }
+        pub event_pump: LazyInit<sdl3::EventPump>,
     }
 
     unsafe impl Sync for SDLContext {}

@@ -39,8 +39,8 @@ fn glow_context(window: &Window) -> Context {
     unsafe {
         Context::from_loader_function(
             |s| {
-                println!("{s}");
-                window.subsystem().gl_get_proc_address(s).unwrap() as _
+                window.subsystem().gl_get_proc_address(s)
+                    .expect(&format!("Expected function '{s}' but did not")) as _
             }
         )
     }
@@ -57,7 +57,6 @@ impl GraphUi {
 
     pub fn prepare(&mut self, window: &GraphWindow, event_pump: &EventPump) {
         self.platform.prepare_frame(&mut common::renderer::SDL.core.borrow_mut(), &mut self.imgui, window, event_pump);
-        self.imgui.new_frame();
         unsafe { self.renderer.gl_context().clear(crate::glow::inner::COLOR_BUFFER_BIT) };
     }
 
