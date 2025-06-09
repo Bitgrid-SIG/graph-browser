@@ -1,5 +1,5 @@
 [package]
-    name = "graph-engine"
+    name = "graph-macros-derive"
     edition.workspace = true
     authors.workspace = true
     version.workspace = true
@@ -8,6 +8,9 @@
     categories.workspace = true
 
 [dependencies]
-    parking_lot.workspace = true
-    common.workspace = true
+    syn = { version = "2", features = ["full"] }
+    quote = "1"
+    proc-macro2 = "1"
 
+[lib]
+    proc-macro = true

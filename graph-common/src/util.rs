@@ -1,11 +1,12 @@
+use imgui::{ClipboardBackend, DummyClipboardContext, SharedFontAtlas};
 
-use imgui::{DummyClipboardContext, SharedFontAtlas, ClipboardBackend};
-
-use std::cell::{RefCell, RefMut, Cell, Ref};
 use std::path::PathBuf;
 
-pub struct LazyInit<T>(RefCell<Option<T>>, Cell<Option<Box<dyn FnOnce() -> T>>>);
+/// Debugging Wrapper for printing an object when it's dropped in a dev build.
+pub struct DropNotify<T: std::fmt::Debug>(T);
 
+
+/// An idiomatic builder object for [`imgui::Context`].
 pub struct ImguiBuilder<C: ClipboardBackend = DummyClipboardContext> {
     fonts: Option<SharedFontAtlas>,
     clipboard: Option<C>,
@@ -17,74 +18,9 @@ pub struct ImguiBuilder<C: ClipboardBackend = DummyClipboardContext> {
     renderer_name: Option<String>,
 }
 
-impl<T> LazyInit<T> {
-    pub fn new(f: impl FnOnce() -> T + 'static) -> Self {
-        Self(RefCell::new(None), Cell::new(Some(Box::new(f))))
-    }
-
-    pub fn exists(&self) -> bool {
-        self.0.borrow().is_some()
-    }
-
-    fn init(&self) {
-        if !self.exists() {
-            let f: Box<dyn FnOnce() -> T> = self.1.take().unwrap();
-            self.0.replace(Some(f()));
-        }
-    }
-
-    pub fn borrow(&self) -> Option<Ref<T>> {
-        self.init();
-        Ref::filter_map(self.0.borrow(), |o| o.as_ref()).ok()
-    }
-
-    pub fn borrow_mut(&mut self) -> Option<RefMut<T>> {
-        self.init();
-        RefMut::filter_map(self.0.borrow_mut(), |o| o.as_mut()).ok()
-    }
-
-    pub fn get_mut(&mut self) -> &mut T {
-        self.init();
-        self.0.get_mut().as_mut().unwrap()
-    }
-
-    pub fn r#use(&self) -> &T {
-        self.init();
-        // if contents cannot be safely borrowed, panic.
-        drop(self.0.try_borrow().unwrap());
-        // guaranteed to be safe because if we can get the pointer
-        // in the first place, then it must exist. So immediately
-        // dereferencing the pointer is always safe.
-        let inner = unsafe { &*self.0.as_ptr() };
-        inner.as_ref().unwrap()
-    }
-
-    pub fn use_mut(&self) -> &mut T {
-        self.init();
-        // if contents cannot be safely mutably borrowed, panic.
-        drop(self.0.try_borrow_mut().unwrap());
-        // guaranteed to be safe because if we can get the pointer
-        // in the first place, then it must exist. So immediately
-        // dereferencing the pointer is always safe.
-        let inner = unsafe { &mut *self.0.as_ptr() };
-        inner.as_mut().unwrap()
-    }
-
-    pub fn take(&mut self) -> Option<T> {
-        self.0.get_mut().take()
-    }
-
-    pub fn swap(&mut self, mut new: T) -> Option<T> {
-        let result = &mut *self.borrow_mut().unwrap();
-        std::mem::swap(result, &mut new);
-        Some(new)
-    }
-
-}
-
 impl<C: ClipboardBackend> ImguiBuilder<C> {
     pub fn new() -> Self {
-        Self{
+        Self {
             fonts: None,
             clipboard: None,
 
@@ -98,8 +34,8 @@ impl<C: ClipboardBackend> ImguiBuilder<C> {
 
     pub fn build(self) -> imgui::Context {
         let mut ctx = self.fonts.map_or_else(
-            || imgui::Context::create(),
-            |atlas| imgui::Context::create_with_shared_font_atlas(atlas)
+            imgui::Context::create,
+            imgui::Context::create_with_shared_font_atlas,
         );
 
         if self.clipboard.is_some() {
@@ -144,18 +80,35 @@ impl<C: ClipboardBackend> ImguiBuilder<C> {
     }
 }
 
-impl<T> std::ops::Deref for LazyInit<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.init();
-        self.r#use()
+impl<T: std::fmt::Debug> From<T> for DropNotify<T> {
+    fn from(value: T) -> Self {
+        Self(value)
     }
 }
 
-impl<T> std::ops::DerefMut for LazyInit<T> {
+impl<T: std::fmt::Debug> std::ops::Deref for DropNotify<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: std::fmt::Debug> std::ops::DerefMut for DropNotify<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.init();
-        self.get_mut()
+        &mut self.0
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<T: std::fmt::Debug> std::ops::Drop for DropNotify<T> {
+    fn drop(&mut self) {
+        println!("{:?}", self.0);
+    }
+}
+
+impl<C: ClipboardBackend> std::default::Default for ImguiBuilder<C> {
+    fn default() -> Self {
+        Self::new()
     }
 }

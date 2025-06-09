@@ -1,30 +1,42 @@
+use parking_lot::RwLock;
 
-use common::renderer::sdl3::event::Event;
-use common::renderer::sdl3::EventPump;
+use std::sync::Arc;
+
 use common::renderer::SDL;
+use common::renderer::sdl3::EventPump;
+use common::renderer::sdl3::event::Event;
 
 #[must_use = "Iterators are lazy and do nothing unless consumed"]
 pub struct GraphEventIterator<'a> {
     window: Option<&'a super::window::GraphWindow>,
-    pump: &'a mut EventPump,
+    pump: Arc<RwLock<EventPump>>,
 }
 
 impl<'a> GraphEventIterator<'a> {
     pub fn new(window: &'a super::window::GraphWindow) -> Self {
-        Self{ window: Some(window), pump: SDL.event_pump.use_mut() }
+        let pump = SDL.event_pump();
+        Self {
+            window: Some(window),
+            pump,
+        }
     }
 }
 
-impl<'a> Iterator for GraphEventIterator<'a> {
+impl Iterator for GraphEventIterator<'_> {
     type Item = Event;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(event) = self.pump.poll_event() {
+        let mut pump = self.pump.write();
+        if let Some(event) = pump.poll_event() {
+            if let Some(mut ui) = self.window.unwrap().get_ui() {
+                ui.handle_event(&event);
+            }
             Some(event)
         } else {
             if let Some(window) = self.window.take() {
                 let mut ui = window.get_ui().unwrap();
-                ui.prepare(window, &self.pump);
+                drop(pump);
+                ui.prepare(window);
             }
             None
         }

@@ -1,0 +1,4 @@
+
+[alias]
+    run = "run -p browser"
+    build = "build -p browser"

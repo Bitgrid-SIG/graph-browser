@@ -1,10 +1,9 @@
-
 use common::renderer::SDL;
 
 use std::cell::{RefCell, RefMut};
 
-use super::ui::{UiFrameGuard, GraphUiBuilder, GraphUi};
-use crate::sdl3::video::Window;
+use super::ui::{GraphUi, GraphUiBuilder, UiFrameGuard};
+use crate::sdl3::video::{Window, WindowBuilder};
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -13,7 +12,7 @@ enum RenderBackend {
     OpenGL,
     Vulkan,
     Metal,
-    CPU,
+    Cpu,
 }
 
 pub struct GraphWindow {
@@ -21,12 +20,14 @@ pub struct GraphWindow {
     gui: RefCell<Option<GraphUi>>,
 }
 
-pub struct GraphWindowBuilder(crate::sdl3::video::WindowBuilder, RenderBackend);
+pub struct GraphWindowBuilder(WindowBuilder, RenderBackend);
 
 impl GraphWindowBuilder {
     fn new(title: &str, width: u32, height: u32) -> Self {
-        let vid = SDL.vid.borrow();
-        Self(crate::sdl3::video::WindowBuilder::new(&vid, title, width, height), RenderBackend::None)
+        Self(
+            WindowBuilder::new(&SDL.video().borrow(), title, width, height),
+            RenderBackend::None,
+        )
     }
 
     pub fn build(self) -> Result<GraphWindow, crate::sdl3::video::WindowBuildError> {
@@ -45,7 +46,7 @@ impl GraphWindowBuilder {
         //     _ => panic!("Backend '{:?}' is not supported", self.1)
         // }
 
-        Ok(GraphWindow{
+        Ok(GraphWindow {
             inner,
             gui: RefCell::new(None),
         })
@@ -142,12 +143,12 @@ impl GraphWindowBuilder {
 }
 
 impl GraphWindow {
-    pub fn new(title: &str, width: u32, height: u32) -> GraphWindowBuilder {
+    pub fn builder(title: &str, width: u32, height: u32) -> GraphWindowBuilder {
         GraphWindowBuilder::new(title, width, height)
     }
 
     pub fn new_ui(&mut self) -> GraphUiBuilder {
-        GraphUi::new(self)
+        GraphUi::builder(self)
     }
 
     pub(crate) fn set_ui(&mut self, ui: GraphUi) {
@@ -166,8 +167,9 @@ impl GraphWindow {
         super::event::GraphEventIterator::new(self)
     }
 
-    pub fn ui_frame_begin<'a>(&'a mut self) -> UiFrameGuard<'a> {
-        UiFrameGuard::new(self.ui_mut().unwrap())
+    pub fn ui_frame_begin(&mut self) -> UiFrameGuard<'_> {
+        let ui = self.ui_mut().unwrap();
+        UiFrameGuard::new(ui)
     }
 }
 

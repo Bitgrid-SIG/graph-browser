@@ -83,6 +83,7 @@ dependencies = [
  "imgui",
  "imgui-glow-renderer",
  "imgui-sdl3-support",
+ "parking_lot",
  "sdl3",
 ]
 
@@ -91,6 +92,25 @@ name = "graph-engine"
 version = "0.1.0"
 dependencies = [
  "graph-common",
+ "parking_lot",
+]
+
+[[package]]
+name = "graph-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "graph-macros-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
