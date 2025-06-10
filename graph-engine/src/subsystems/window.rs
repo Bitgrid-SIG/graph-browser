@@ -5,6 +5,7 @@ use std::cell::{RefCell, RefMut};
 use super::ui::{GraphUi, GraphUiBuilder, UiFrameGuard};
 use crate::sdl3::video::{Window, WindowBuilder};
 
+/// Possible rendering backends for a window.
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RenderBackend {
@@ -15,11 +16,28 @@ enum RenderBackend {
     Cpu,
 }
 
+/// A window with optional [`GraphUi`] state attached.
 pub struct GraphWindow {
+    /// Underlying SDL window.
     inner: Window,
+    /// Optional [`GraphUi`] instance for this window, with interior mutability.
     gui: RefCell<Option<GraphUi>>,
 }
 
+/// Builder for `GraphWindow`, allowing configuration of SDL window flags and render backend.
+/// An idiomatic builder for [`GraphWindow`].
+///
+/// Allows optional configuration of:
+/// - flags (see [`set_window_flags()`](WindowBuilder::set_window_flags))
+/// - position (x + y or centered)
+/// - fullscreen status
+/// - pixel-density
+/// - rendering backend
+/// - hidden status
+/// - borderless status
+/// - resizeable status
+/// - minimized/maximized status
+/// - focused status
 pub struct GraphWindowBuilder(WindowBuilder, RenderBackend);
 
 impl GraphWindowBuilder {
@@ -30,19 +48,25 @@ impl GraphWindowBuilder {
         )
     }
 
+    /// Finalize building the window and return a `GraphWindow`.
+    ///
+    /// Errors if SDL fails to build the window, or if no rendering backend was selected.
     pub fn build(self) -> Result<GraphWindow, crate::sdl3::video::WindowBuildError> {
+        matches!(self.1, RenderBackend::None)
+            .then(|| panic!("No render backend was selected before building the graph window"));
+
         let inner = self.0.build()?;
 
+        // TODO: Why is this not working?
+
         // match self.1 {
-        //     RenderBackend::None => {
-        //         panic!("No render backend was set!");
-        //     },
         //     RenderBackend::OpenGL => {
         //         let gl_context = inner.gl_create_context().unwrap();
         //         inner.gl_make_current(&gl_context).unwrap();
         //         inner.subsystem().gl_set_swap_interval(1).unwrap();
         //         println!("Initializing OpenGL");
-        //     }
+        //     },
+        //     RenderBackend::None => {}, // already checked
         //     _ => panic!("Backend '{:?}' is not supported", self.1)
         // }
 
@@ -52,7 +76,7 @@ impl GraphWindowBuilder {
         })
     }
 
-    /// Sets the underlying window flags.
+    /// Sets the underlying window flags. <br />
     /// This will effectively undo any previous build operations, excluding window size and position.
     pub fn set_window_flags(mut self, flags: u32) -> GraphWindowBuilder {
         self.0.set_window_flags(flags);
@@ -143,32 +167,57 @@ impl GraphWindowBuilder {
 }
 
 impl GraphWindow {
+    /// Begin building a [`GraphWindow`] with the given title and size.
     pub fn builder(title: &str, width: u32, height: u32) -> GraphWindowBuilder {
         GraphWindowBuilder::new(title, width, height)
     }
 
+    /// Create a new GUI for this window.
+    ///
+    /// Returns a builder for [`GraphUi`].
+    /// Calling [`GraphUiBuilder::build()`] automatically sets it as this window's gui.
     pub fn new_ui(&mut self) -> GraphUiBuilder {
         GraphUi::builder(self)
     }
 
+    /// Set the GUI instance for this window.
+    ///
+    /// Called internally after building via `new_ui().build(...)`.
     pub(crate) fn set_ui(&mut self, ui: GraphUi) {
         self.gui.replace(Some(ui));
     }
 
+    /// Get a mutable reference to the GUI if it exists.
+    ///
+    /// Returns `Some(RefMut<GraphUi>)` if a GUI was set, otherwise `None`.
+    ///
+    /// See also: [`RefMut`].
     pub fn get_ui(&self) -> Option<RefMut<GraphUi>> {
         RefMut::filter_map(self.gui.borrow_mut(), |o| o.as_mut()).ok()
     }
 
+    /// Internal helper to get a mutable reference to the GUI.
     fn ui_mut(&mut self) -> Option<&mut GraphUi> {
         self.gui.get_mut().as_mut()
     }
 
+    /// Poll SDL events, returning an iterator over unprocessed [`crate::sdl3::event::Event`]s.
+    ///
+    /// The iterator does some automatic state-handling, including:
+    /// - Sending each event to the current [`imgui`](crate::imgui) ui, if the window has a [`GraphUi`].
+    ///     - See also: [`GraphUi::handle_event()`]
+    /// - When the iterator is exhausted, before returning [None]
     pub fn poll_events(&self) -> super::event::GraphEventIterator {
         super::event::GraphEventIterator::new(self)
     }
 
+    /// Begin a new UI frame, returning a guard for frame lifetime.
+    ///
+    /// Panics if no GUI has been set.
     pub fn ui_frame_begin(&mut self) -> UiFrameGuard<'_> {
-        let ui = self.ui_mut().unwrap();
+        let ui = self
+            .ui_mut()
+            .expect("Tried to begin a ui frame on a window with no ui");
         UiFrameGuard::new(ui)
     }
 }

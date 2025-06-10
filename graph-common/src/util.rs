@@ -2,11 +2,23 @@ use imgui::{ClipboardBackend, DummyClipboardContext, SharedFontAtlas};
 
 use std::path::PathBuf;
 
-/// Debugging Wrapper for printing an object when it's dropped in a dev build.
+/// Debugging wrapper that prints the inner object when dropped in dev builds.
+///
+/// Wraps a `T: Debug`. In non-dev builds, behaves as a transparent wrapper.
+/// In dev builds (`cfg(debug_assertions)`), implements [`std::ops::Drop`] to
+/// print the debug representation of the inner value when dropped.
 pub struct DropNotify<T: std::fmt::Debug>(T);
 
-
-/// An idiomatic builder object for [`imgui::Context`].
+/// An idiomatic builder for [`imgui::Context`].
+///
+/// Allows optional configuration of:
+/// - font atlas ([`SharedFontAtlas`])
+/// - clipboard backend (C: [`ClipboardBackend`])
+///     - Defaults to [`DummyClipboardContext`]
+/// - ini file path ([`PathBuf`])
+/// - log file path ([`PathBuf`])
+/// - platform name ([`String`])
+/// - renderer name ([`String`])
 pub struct ImguiBuilder<C: ClipboardBackend = DummyClipboardContext> {
     fonts: Option<SharedFontAtlas>,
     clipboard: Option<C>,
@@ -19,6 +31,7 @@ pub struct ImguiBuilder<C: ClipboardBackend = DummyClipboardContext> {
 }
 
 impl<C: ClipboardBackend> ImguiBuilder<C> {
+    /// Create a new [`ImguiBuilder`] with default (no) configuration.
     pub fn new() -> Self {
         Self {
             fonts: None,
@@ -32,6 +45,7 @@ impl<C: ClipboardBackend> ImguiBuilder<C> {
         }
     }
 
+    /// Build and return the configured [`imgui::Context`].
     pub fn build(self) -> imgui::Context {
         let mut ctx = self.fonts.map_or_else(
             imgui::Context::create,
@@ -49,31 +63,56 @@ impl<C: ClipboardBackend> ImguiBuilder<C> {
         ctx
     }
 
+    /// This method is used to inform whether [`Self::build()`] uses
+    /// [`Context::create_with_shared_font_atlas()`](imgui::Context::create_with_shared_font_atlas)
+    /// <br />
+    /// to construct the [Context](imgui::Context), or if it uses
+    /// [`Context::create()`](imgui::Context::create).
+    ///
+    /// See
+    /// [`Context::create_with_shared_font_atlas()`](imgui::Context::create_with_shared_font_atlas)
+    /// for more information.
     pub fn font_atlas(mut self, atlas: SharedFontAtlas) -> Self {
         self.fonts = Some(atlas);
         self
     }
 
+    /// This method is used to provide the [`ClipboardBackend`]
+    /// type and value to use in the built context.
+    ///
+    /// See [`Context::set_clipboard_backend`](imgui::Context::set_clipboard_backend)
+    /// for more information.
     pub fn clipboard_backend(mut self, backend: C) -> Self {
         self.clipboard = Some(backend);
         self
     }
 
+    /// This method is used to provide the ini file's path for imgui
+    /// to save and load layout data.
     pub fn ini(mut self, path: impl Into<PathBuf>) -> Self {
         self.ini_file = Some(path.into());
         self
     }
 
+    /// This method is used to provide the log file's path for imgui
+    /// to write logging data.
     pub fn log(mut self, path: impl Into<PathBuf>) -> Self {
         self.log_file = Some(path.into());
         self
     }
 
+    /// This method is used to provide the platform name to identify
+    /// the host platform.
     pub fn platform(mut self, path: impl Into<String>) -> Self {
         self.platform_name = Some(path.into());
         self
     }
 
+    /// This method is used to provide the platform name to identify
+    /// the rendering backend.
+    ///
+    /// TODO: Should this be set automatically based on what
+    /// rendering backend + graphics library are used?
     pub fn renderer(mut self, path: impl Into<String>) -> Self {
         self.renderer_name = Some(path.into());
         self

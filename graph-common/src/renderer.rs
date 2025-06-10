@@ -1,14 +1,14 @@
 //! # Graph's Common Renderer Objects
-//! 
+//!
 //! Because this crate is how each dependent crate accesses the [`sdl3`] and
 //! [`imgui`] modules (and more), it is idiomatic for dependent crates within
 //! the graph workspace to include the following in their `lib.rs`/`main.rs`:
-//! 
+//!
 //! ```rust
 //! use common::renderer::imgui;
 //! use common::renderer::sdl3;
 //! ```
-//! 
+//!
 //! Accessing those modules elsewhere in the crate is then done using
 //! `crate::imgui::<>` and `crate::sdl3::<>`.
 
@@ -24,8 +24,8 @@ use crate::util::DropNotify;
 
 /// A wrapper around the [`imgui`] crate. This is how all dependent crates
 /// access the imgui crate.
-/// 
-/// 
+///
+///
 pub mod imgui {
     pub use imgui::*;
     pub use imgui_sdl3_support as sdl3_support;
@@ -42,13 +42,13 @@ pub mod imgui {
 }
 
 /// Global SDL context for the workspace, lazily initialized on first access.
-/// 
+///
 /// This static provides a shared [`SdlContext`] that initializes and holds all
 /// currently-available SDL3 subsystems and related rendering resources exactly
 /// once. Every dependent crate can access SDL and its subsystems via this object,
 /// avoiding the need to hold and pass references back and forth through the
 /// codebase.
-/// 
+///
 /// Usage:
 /// - Access via `common::renderer::SDL`, e.g. `use common::renderer::SDL;` or
 ///   call methods on `SDL` to fetch specific subsystems (e.g. event pump, video,
@@ -62,7 +62,7 @@ pub mod imgui {
 ///         - [`sdl3::EventPump`]
 ///     - [`sdl3::VideoSubsystem`]
 ///     - [`sdl3::AudioSubsystem`]
-/// 
+///
 /// Thread-safety:
 /// - Backed by [`std::sync::LazyLock`]<[`SdlContext`]>, so both initialization
 ///   and access of the object itself are atomic and safe across threads.
@@ -73,7 +73,7 @@ pub mod imgui {
 ///   accessed from other threads (event pump notwithstanding). For more
 ///   information, see [`crate::renderer::Scf`], [`crate::renderer::ScfAsync`],
 ///   and [`crate::renderer::LazyScf`].
-/// 
+///
 /// Cleanup:
 /// - Because statics are not dropped automatically upon program exit, if clean
 ///   shutdown logic is required (including dropping subsystems in a defined order),
@@ -84,11 +84,11 @@ pub mod imgui {
 /// // In any crate depending on `common`:
 /// use common::renderer::SDL;
 /// // ...
-/// 
+///
 /// let mut event_pump = SDL.event_pump().write();
-/// 
+///
 /// // process events, render, etc.
-/// 
+///
 /// drop(event_pump); // make sure to release the write-lock
 /// ```
 ///
@@ -122,10 +122,10 @@ pub static SDL: LazyLock<SdlContext> = LazyLock::new(|| {
 });
 
 /// ## Single-Threaded "SDL Context Field".
-/// 
+///
 /// Internally holds an [Option]<[Rc]<[RefCell]\<T>>>, allowing shared or
 /// exclusive access (via `Rc<RefCell<T>>`) when open, or `None` when closed.
-/// 
+///
 /// Typical usage:
 /// - [`Scf::empty()`] to start with no value.
 /// - [`Scf::new()`] to populate immediately.
@@ -134,10 +134,10 @@ pub static SDL: LazyLock<SdlContext> = LazyLock::new(|| {
 struct Scf<T>(RefCell<Option<Rc<RefCell<T>>>>);
 
 /// ## Multi-Threaded "SDL Context Field".
-/// 
+///
 /// Internally holds an [Option]<[Arc]<[parking_lot::RwLock]\<T>>>, allowing
 /// shared or exclusive access across threads when open, or `None` when closed.
-/// 
+///
 /// Typical usage:
 /// - [`ScfAsync::empty()`] to start with no value.
 /// - [`ScfAsync::new()`] to populate immediately.
@@ -146,12 +146,12 @@ struct Scf<T>(RefCell<Option<Rc<RefCell<T>>>>);
 struct ScfAsync<T>(RwLock<Option<Arc<RwLock<T>>>>);
 
 /// ## Single-Threaded Lazy-Initialized "SDL Context Field".
-/// 
+///
 /// Contains an [`Scf<T>`] for the stored value and a
 /// [Cell]<Option<Box<dyn FnOnce() -> T>>> holding the initialization closure.
 /// The first `get()` call runs the closure to produce the value, thereafter
 /// stored in the inner `Scf`.
-/// 
+///
 /// Typical usage:
 /// - `LazyScf::new(f)` where `f` produces `T`. Initially `is_open() == false`.
 /// - On first `get()`, the closure is taken and invoked; the result is stored.
@@ -194,18 +194,23 @@ impl<T> Scf<T> {
 
     /// Get a shared handle to the inner value. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn get(&self) -> Rc<RefCell<T>> {
-        self.0.borrow().as_ref().cloned()
+        self.0
+            .borrow()
+            .as_ref()
+            .cloned()
             .expect("Tried to access Scf with no value inside")
     }
 
     /// Close the field, removing the inner value.
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn close(&self) {
-        self.0.borrow_mut().take()
+        self.0
+            .borrow_mut()
+            .take()
             .expect("Tried to close Scf with no value inside");
     }
 }
@@ -229,18 +234,23 @@ impl<T> ScfAsync<T> {
     }
 
     /// Get a shared handle to the inner value.
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn get(&self) -> Arc<RwLock<T>> {
-        self.0.read().as_ref().cloned()
+        self.0
+            .read()
+            .as_ref()
+            .cloned()
             .expect("Tried to access ScfAsync value after it was closed")
     }
 
     /// Close the field, removing the inner value.
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn close(&self) {
-        self.0.write().take()
+        self.0
+            .write()
+            .take()
             .expect("Tried to close ScfAsync with no value inside");
     }
 }
@@ -259,11 +269,13 @@ impl<T> LazyScf<T> {
     }
 
     /// Get a shared handle to the inner value.
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn get(&self) -> Rc<RefCell<T>> {
         if self.0.0.borrow().is_none() {
-            let f = self.1.take()
+            let f = self
+                .1
+                .take()
                 .expect("Tried to access LazyScf value after it was closed");
             let fcell = Rc::new(RefCell::new(f()));
             *self.0.0.borrow_mut() = Some(fcell);
@@ -272,12 +284,15 @@ impl<T> LazyScf<T> {
     }
 
     /// Close the field, removing the inner value.
-    /// 
+    ///
     /// Panics if the field is empty/closed.
     fn close(&self) {
         let mut fcell = self.1.take();
         fcell.is_some().then(|| fcell.take().unwrap());
-        self.0.0.borrow_mut().take()
+        self.0
+            .0
+            .borrow_mut()
+            .take()
             .expect("Tried to close LazyScf with no value inside");
     }
 }
@@ -285,7 +300,7 @@ impl<T> LazyScf<T> {
 impl SdlContext {
     /// Get a shared handle to SDL3. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn core(&self) -> Rc<RefCell<sdl3::Sdl>> {
         self.core_inner.get()
@@ -293,7 +308,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's events subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn events(&self) -> Rc<RefCell<DropNotify<sdl3::EventSubsystem>>> {
         self.events_inner.get()
@@ -301,7 +316,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's video subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn video(&self) -> Rc<RefCell<DropNotify<sdl3::VideoSubsystem>>> {
         self.vid_inner.get()
@@ -309,14 +324,14 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's audio subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn audio(&self) -> Rc<RefCell<DropNotify<sdl3::AudioSubsystem>>> {
         self.aux_inner.get()
     }
 
     /// Get a shared handle to SDL3's event pump.
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn event_pump(&self) -> Arc<RwLock<sdl3::EventPump>> {
         self.event_pump_inner.get()
@@ -324,7 +339,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's gamepad subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn gamepad(&self) -> Rc<RefCell<DropNotify<sdl3::GamepadSubsystem>>> {
         self.gamepad_inner.get()
@@ -332,7 +347,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's joystick subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn joystick(&self) -> Rc<RefCell<DropNotify<sdl3::JoystickSubsystem>>> {
         self.joystick_inner.get()
@@ -340,7 +355,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's sensor subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn sensor(&self) -> Rc<RefCell<DropNotify<sdl3::SensorSubsystem>>> {
         self.sensor_inner.get()
@@ -348,7 +363,7 @@ impl SdlContext {
 
     /// Get a shared handle to SDL3's haptic subsystem. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for more information.
     pub fn haptic(&self) -> Rc<RefCell<DropNotify<sdl3::HapticSubsystem>>> {
         self.haptic_inner.get()
@@ -356,19 +371,31 @@ impl SdlContext {
 
     /// Drop each of SDL3's subsystems, SDL3's event pump, and SDL3. Graceful de-init. <br />
     /// ***NOT THREAD-SAFE***
-    /// 
+    ///
     /// See [`SDL`] for information.
     pub fn close(&self) {
-        self.haptic_inner.is_open().then(|| self.haptic_inner.close());
-        self.sensor_inner.is_open().then(|| self.sensor_inner.close());
-        self.joystick_inner.is_open().then(|| self.joystick_inner.close());
-        self.gamepad_inner.is_open().then(|| self.gamepad_inner.close());
-        
-        self.event_pump_inner.is_open().then(|| self.event_pump_inner.close());
+        self.haptic_inner
+            .is_open()
+            .then(|| self.haptic_inner.close());
+        self.sensor_inner
+            .is_open()
+            .then(|| self.sensor_inner.close());
+        self.joystick_inner
+            .is_open()
+            .then(|| self.joystick_inner.close());
+        self.gamepad_inner
+            .is_open()
+            .then(|| self.gamepad_inner.close());
+
+        self.event_pump_inner
+            .is_open()
+            .then(|| self.event_pump_inner.close());
         self.aux_inner.is_open().then(|| self.aux_inner.close());
         self.vid_inner.is_open().then(|| self.vid_inner.close());
-        self.events_inner.is_open().then(|| self.events_inner.close());
-        
+        self.events_inner
+            .is_open()
+            .then(|| self.events_inner.close());
+
         self.core_inner.is_open().then(|| self.core_inner.close());
     }
 }

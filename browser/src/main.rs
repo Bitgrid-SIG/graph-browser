@@ -21,6 +21,7 @@ fn main() {
         .build()
         .unwrap();
 
+    // TODO: Why does this work here but not in GraphWindowBuilder::build() which happens right before this?
     let gl_context = window.gl_create_context().unwrap();
     window.gl_make_current(&gl_context).unwrap();
     vid.borrow().gl_set_swap_interval(1).unwrap();
