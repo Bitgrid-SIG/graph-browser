@@ -11,15 +11,19 @@ supporting deterministic content execution and minimal runtime dependencies.
 
 This repository is a Cargo workspace that includes:
 
-* **graph-browser:** The crate that produces Graph's executable.
-    * **graph-runtime:** WASM runtime that executes general wasm and runs the compiled Teal code.
-        * **tl2wasm:** the Teal-to-WASM compiler used by Graph. Compiles Lua as Teal with `any`
-            as the implicit type for all values (with steep runtime costs).
-        * **graph-www:** (optional) feature-gated support for the World Wide Web, including a
-            TypeScript by compiling.
-            * **ts2wasm:** the TypeScript-to-WASM Compiler used by Graph. Like tl2wasm,
-            JavaScript is compiled as Typescript with `any` as the implicit type for all
-            values (with steep runtime costs).
+* **browser:** The application of the **graph-engine** crate to produce the Graph Browser.
+* **graph-common:** Functionality shared between Graph's various crates.
+    * **imgui module:** A wrapper module through which the rest of the workspace may access the
+    `imgui` crate. This wrapper module also adds in the `imgui_sdl3_support` as `sdl3_support`
+    and `renderers` module.
+        * **renderers:** The module through which the rest of the workspace may access various
+        renderer backends for the `imgui` crate.
+            * **glow:** A wrapper module through which the rest of the workspace may access the
+            `imgui_glow_renderer` crate, with `imgui_glow_renderer::glow` aliased as
+            `common::renderer::imgui::renderers::glow::inner`.
+    * **sdl3 module:** an alias through which the rest of the workspace may access the `sdl3` crate.
+* **graph-engine:** The combination of the Graph Workspace's various crates into a single,
+    unified engine.
 
 ---
 
@@ -38,26 +42,34 @@ This repository is a Cargo workspace that includes:
 # Progress
 
 - [ ] Browser
-    - [ ] SDL3 Scaffolding
-    - [ ] Grid HTML Dialect
-    - [ ] Grid CSS Dialect (subset of www's dialect)
+    - [X] SDL3 + DearImGui Scaffolding
+        - [X] Code
+        - [X] Documentation
+    - [ ] Graph's Chrome
+        ([What is a browser's chrome?](https://developer.mozilla.org/en-US/docs/Glossary/Chrome))
+    - [ ] Page Rendering
+        - [ ] **B**it**g**rid **M**arkup **L**anguage (BGML)
+            - [ ] Grammar Spec
+            - [ ] Parser
+            - [ ] Tag Spec
+                - [ ] Default Rendering (Style) Attributes
+            - [ ] Renderer
+        - [ ] CSS
+            - [ ] Rendering Model Specs
+            - [X] Parser
+                - Crest
+            - [ ] Attribute Spec
+                - [ ] How each CSS attribute affects each BGML tag
+            - [ ] Modify engine to apply css before rendering
     - [ ] Runtime
-        - [ ] `tl2wasm`
-            - [ ] Teal Language Definition
-            - [ ] Grammar + Syntax Validation
-            - [ ] WASM Support for Runtime Behaviour
-            - [ ] AST to WASM transformer
-        - [ ] `www` feature
-            - [ ] SVG
-            - [ ] WWW HTML Dialect
-            - [ ] WWW CSS Dialect
-            - [ ] `ts2wasm`
-                - [ ] Typescript Language Definition
-                - [ ] Grammar + Syntax Validation
-                - [ ] WASM Support for Runtime Behaviour
-                - [ ] AST to WASM transformer
-                
-
+        - [ ] Grid API for Lua Runtime
+        - [ ] Teal API for Lua Runtime
+        - [ ] Grid API for JS Runtime
+        - [ ] Typescript API for JS Runtime
+        - [ ] Teal-Types to WASM Compiler
+        - [ ] Typescript-Types to WASM Compiler
+        - [ ] Teal-Any to WASM Compiler
+        - [ ] Typescript-Any to WASM Compiler
 
 ---
 
