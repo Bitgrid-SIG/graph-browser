@@ -69,6 +69,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "graph-bgml"
+version = "0.1.0"
+
+[[package]]
 name = "graph-browser"
 version = "0.1.0"
 dependencies = [

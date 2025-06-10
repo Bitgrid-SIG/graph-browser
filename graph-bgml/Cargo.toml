@@ -1,0 +1,11 @@
+[package]
+    name = "graph-bgml"
+    edition = "2024"
+    authors.workspace = true
+    version.workspace = true
+    readme.workspace = true
+    keywords.workspace = true
+    categories.workspace = true
+
+[dependencies]
+    

@@ -24,8 +24,6 @@ use crate::util::DropNotify;
 
 /// A wrapper around the [`imgui`] crate. This is how all dependent crates
 /// access the imgui crate.
-///
-///
 pub mod imgui {
     pub use imgui::*;
     pub use imgui_sdl3_support as sdl3_support;

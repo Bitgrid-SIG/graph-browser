@@ -8,6 +8,7 @@
         "graph-common",
         "graph-macros",
         "graph-macros-derive",
+        "graph-bgml",
     ]
 
     [workspace.package]
