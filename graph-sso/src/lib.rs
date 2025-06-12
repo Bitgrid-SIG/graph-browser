@@ -36,17 +36,6 @@ pub struct SmallStringCollection<const N: usize, const L: usize = { N.div_ceil(S
     usize,
 );
 
-fn strcmp(a: &str, b: &str) -> bool {
-    let ac = a.chars();
-    let bc = b.chars();
-    for (a, b) in ac.into_iter().zip(bc.into_iter()) {
-        if a != b {
-            return false;
-        }
-    }
-    return true;
-}
-
 impl SmallString {
     pub fn new<Q: core::borrow::Borrow<str>>(q: &Q) -> Result<Self> {
         let s: &str = q.borrow();
@@ -81,7 +70,7 @@ impl SmallString {
     }
 
     /// Create a zero‐filled [`SmallString`].  
-    /// 
+    ///
     /// # Safety
     /// Contents are not valid UTF-8 and length is zero; only use for padding.
     pub unsafe fn empty() -> Self {
@@ -126,8 +115,7 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
                         .get(i)
                         .map_or_else(|| unsafe { Ok(SmallString::empty()) }, SmallString::new)
                 });
-                
-                
+
                 for s in line.iter() {
                     if let Err(e) = s {
                         return Err(e.clone());
@@ -135,7 +123,7 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
                 }
 
                 let line: [SmallString; SS_PER_CACHELINE] = line.map(|o| o.unwrap());
-                
+
                 Ok(SSCacheLine(line, [0; SS_CACHELINE_PADDING]))
             }
         });
@@ -149,6 +137,15 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
         let lines: [SSCacheLine; L] = lines.map(|o| o.unwrap());
 
         Ok(Self(lines, N))
+    }
+
+    #[inline]
+    pub const fn size(&self) -> usize {
+        N
+    }
+
+    pub fn sort_with<F: Fn(&[u8; N], &[u8; N]) -> core::cmp::Ordering>(&mut self) {
+        // todo!()
     }
 
     #[inline]
@@ -167,8 +164,8 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
         }
 
         // TODO: Use a more efficient algorithm for finding a matching small-string
-        (0..self.1).into_iter()
-            .find(|&idx| strcmp(self[idx].as_str(), s))
+        (0..self.1)
+            .find(|&idx| self[idx].as_str() == s)
             .ok_or(SSErrorType::MatchNotFound)
     }
 }
@@ -217,10 +214,16 @@ mod tests {
         assert!(col.find("z").is_err());
 
         assert!(col.find("").is_err());
-        assert!(matches!(col.find("").unwrap_err(), SSErrorType::StringEmpty));
+        assert!(matches!(
+            col.find("").unwrap_err(),
+            SSErrorType::StringEmpty
+        ));
 
         let long_string = "a".repeat(INLINE_CAPACITY + 1);
         assert!(col.find(&long_string as &str).is_err());
-        assert!(matches!(col.find(long_string).unwrap_err(), SSErrorType::StringTooBig));
+        assert!(matches!(
+            col.find(long_string).unwrap_err(),
+            SSErrorType::StringTooBig
+        ));
     }
 }
