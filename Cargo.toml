@@ -9,11 +9,14 @@
         "graph-macros",
         "graph-macros-derive",
         "graph-bgml",
+        "stink",
+        "graph-sso",
     ]
 
     [workspace.package]
         edition = "2024"
         authors = ["Maxine Zick <maxine@pnk.dev>"]
+        repository = "https://github.com/Bitgrid-SIG/graph-browser"
         version = "0.1.0"
         readme = "README.md"
         keywords = ["bitgrid", "browser", "teal", "wasm", "typescript"]
@@ -37,10 +40,17 @@
     [workspace.dependencies.imgui-glow-renderer]
         version = "0.13.0"
 
+    [workspace.dependencies.sso]
+        path = "graph-sso"
+        package = "graph-sso"
+
     [workspace.dependencies.common]
         path = "graph-common"
         package = "graph-common"
 
     [workspace.dependencies.graph-engine]
         path = "graph-engine"
+
+    [workspace.dependencies.criterion]
+        version = "0.6.0"
 
