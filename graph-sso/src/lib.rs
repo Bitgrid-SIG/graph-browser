@@ -1,22 +1,41 @@
-#![feature(generic_const_exprs)]
+#![feature(generic_const_exprs, str_from_raw_parts, ptr_metadata)]
 #![allow(incomplete_features)]
 #![no_std]
 
-use static_assertions::const_assert_eq;
+#[macro_use]
+mod const_utils;
 
-const CACHELINE_WIDTH: usize = 32;
+#[macro_use]
+extern crate static_assertions;
 
-// try to fit multiple entire small-strings into a standard cache-line
-const INLINE_CAPACITY: usize = 9;
+#[macro_use]
+extern crate const_str;
 
-const SS_PER_CACHELINE: usize = CACHELINE_WIDTH / size_of::<SmallString>();
-const SS_CACHELINE_PADDING: usize = CACHELINE_WIDTH - (SS_PER_CACHELINE * size_of::<SmallString>());
+use core::mem::MaybeUninit;
+
+/// The number of bytes in each cache-line. This is almost always 32 or 64,
+/// with 32 being more common.
+pub const CACHELINE_WIDTH: usize = 32;
+
+/// The size of each small-string. This is used to determine the buffer-size
+/// of each small-string, how many small-strings will fit into a cache-line,
+/// and the amount of padding in each cache-line.
+pub const INLINE_CAPACITY: usize = 9;
+
+/// The number of small-strings that can fit into a cache-line.
+pub const SS_PER_CACHELINE: usize = CACHELINE_WIDTH / size_of::<SmallString>();
+
+/// The number of bytes used to pad each cache-line.
+pub const SS_CACHELINE_PADDING: usize =
+    CACHELINE_WIDTH - (SS_PER_CACHELINE * size_of::<SmallString>());
 
 #[derive(core::clone::Clone, core::fmt::Debug)]
 pub enum SSErrorType {
     StringTooBig,
     StringEmpty,
     MatchNotFound,
+    Uninit,
+    Utf8Error(core::str::Utf8Error),
 }
 
 type Result<T> = core::result::Result<T, SSErrorType>;
@@ -27,7 +46,10 @@ pub struct SmallString(u8, [u8; INLINE_CAPACITY]);
 // align(32): even if the width is changed to 64, this is still nicely aligned
 // to / against cache-line boundaries
 #[repr(C, align(32))]
-pub struct SSCacheLine([SmallString; SS_PER_CACHELINE], [u8; SS_CACHELINE_PADDING]);
+pub struct SSCacheLine(
+    [MaybeUninit<SmallString>; SS_PER_CACHELINE],
+    [u8; SS_CACHELINE_PADDING],
+);
 
 const_assert_eq!(size_of::<SSCacheLine>(), CACHELINE_WIDTH);
 
@@ -37,8 +59,7 @@ pub struct SmallStringCollection<const N: usize, const L: usize = { N.div_ceil(S
 );
 
 impl SmallString {
-    pub fn new<Q: core::borrow::Borrow<str>>(q: &Q) -> Result<Self> {
-        let s: &str = q.borrow();
+    pub const fn new(s: &str) -> Result<MaybeUninit<Self>> {
         let l = s.len();
 
         if l >= INLINE_CAPACITY {
@@ -49,39 +70,105 @@ impl SmallString {
         }
 
         let mut bytes: [u8; INLINE_CAPACITY] = [0; INLINE_CAPACITY];
-        bytes[..l].copy_from_slice(s.as_bytes());
+        unsafe { s.as_ptr().copy_to(bytes.as_mut_ptr(), l) };
 
-        Ok(Self(s.len() as u8, bytes))
+        Ok(MaybeUninit::new(Self(s.len() as u8, bytes)))
+    }
+
+    /// Check if the string has been initialized by checking if the size is
+    /// a valid length. Assumes that an invalid length is uninitialized.
+    #[inline(always)]
+    pub const fn is_init(&self) -> bool {
+        self.0 != 0 || self.0 > (INLINE_CAPACITY as u8)
+    }
+
+    /// Get a fat pointer (DST) to the buffer using the size of the string
+    /// instead of the size of the buffer itself.
+    ///
+    /// # Safety
+    /// This doesn't do any checks so usage needs to be within already-checked
+    /// contexts.
+    #[inline(always)]
+    const unsafe fn get_dst(&self) -> &[u8] {
+        unsafe { &*core::ptr::from_raw_parts(self.1.as_ptr(), self.0 as usize) }
+    }
+
+    /// Check if the string is valid utf-8, returning an Err if it isn't.
+    pub const fn check_utf8(&self) -> Result<()> {
+        if self.is_init() {
+            // safe because we're in a checked context
+            let s: &[u8] = unsafe { self.get_dst() };
+            let r = core::str::from_utf8(s);
+            if r.is_ok() {
+                Ok(())
+            } else if let Err(e) = r {
+                Err(SSErrorType::Utf8Error(e))
+            } else {
+                unreachable!()
+            }
+        } else {
+            Err(SSErrorType::Uninit)
+        }
     }
 
     /// Returns the UTF-8 string slice.
     ///
     /// # Safety
-    /// Guaranteed safe because [`Self::bytes`] is constructed from valid utf-8,
-    /// UNLESS this is an [`Self::empty`]. For a checked version, see
-    /// [`Self::as_str_checked()`].
-    pub fn as_str(&self) -> &str {
-        unsafe { core::str::from_utf8_unchecked(&self.1[..self.0 as usize]) }
+    /// A common use of `SmallString` is as a type wrapped in a [`MaybeUninit`].
+    ///
+    /// This is guaranteed to be safe if it was initialized using [`Self::new`].
+    /// If it was initialized any other way (such as [`MaybeUninit::zeroed`]),
+    /// there are NO safety guarantees!
+    #[inline]
+    pub const unsafe fn as_str_unchecked(&self) -> &str {
+        unsafe { core::str::from_raw_parts(self.1.as_ptr(), self.0 as usize) }
     }
 
-    /// Like [`Self::as_str`], but returns `None` when called on an "empty" zero‐filled instance.
-    pub fn as_str_checked(&self) -> Option<&str> {
-        (self.0 != 0).then(|| self.as_str())
-    }
-
-    /// Create a zero‐filled [`SmallString`].  
+    /// Returns the UTF-8 string slice.
     ///
     /// # Safety
-    /// Contents are not valid UTF-8 and length is zero; only use for padding.
-    pub unsafe fn empty() -> Self {
-        Self(0, [0; INLINE_CAPACITY])
+    /// This function uses [`str::from_utf8`], which checks that the bytes are valid
+    /// utf-8. Because this is slow, you should generally prefer [`Self::as_str_maybe`]
+    /// for a faster check that's just as reliable.
+    ///
+    /// See also: [`Self::as_str_unchecked`]
+    pub const fn as_str(&self) -> Result<&str> {
+        if self.is_init() {
+            let s: &[u8] = unsafe { &*core::ptr::from_raw_parts(self.1.as_ptr(), self.0 as usize) };
+            let r = core::str::from_utf8(s);
+            if let Ok(s) = r {
+                Ok(s)
+            } else if let Err(e) = r {
+                Err(SSErrorType::Utf8Error(e))
+            } else {
+                unreachable!()
+            }
+        } else {
+            Err(SSErrorType::Uninit)
+        }
+    }
+
+    /// Like [`Self::as_str`], but returns `None` when called on an uninitialized instance.
+    #[inline]
+    pub fn as_str_maybe(&self) -> Option<&str> {
+        self.is_init().then(|| unsafe { self.as_str_unchecked() })
     }
 }
 
 impl SSCacheLine {
-    fn new<Q: core::borrow::Borrow<str>>(ss_arr: &[Q; SS_PER_CACHELINE]) -> Self {
-        let line: [SmallString; SS_PER_CACHELINE] =
-            core::array::from_fn(|idx| SmallString::new(&ss_arr[idx]).unwrap());
+    const fn new(ss_arr: &[&str; SS_PER_CACHELINE]) -> Self {
+        let mut line: [MaybeUninit<SmallString>; SS_PER_CACHELINE] = unsafe { core::mem::zeroed() };
+
+        let mut l = SS_PER_CACHELINE;
+        while l > 0 {
+            let r = SmallString::new(ss_arr[l - 1]);
+            if let Ok(maybe) = r {
+                line[l - 1] = maybe;
+                l -= 1;
+            } else if let Err(e) = r {
+                ss_const_panic!("Failed to create SmallString: ", e);
+            }
+        }
         let padding: [u8; SS_CACHELINE_PADDING] = [0; SS_CACHELINE_PADDING];
         Self(line, padding)
     }
@@ -96,65 +183,100 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
     }
 
     /// Build a padded cache-line of [`SmallString`]s from an array of `str`s.
-    pub fn new<Q: core::borrow::Borrow<str>>(ss_arr: &[Q; N]) -> Result<Self> {
-        let lines: [Result<SSCacheLine>; L] = core::array::from_fn(|idx| {
+    pub const fn new(ss_arr: &[&str; N]) -> Result<Self> {
+        let mut lines: [Result<SSCacheLine>; L] = unsafe { core::mem::zeroed() };
+
+        const_loop_range!(0; idx < L; {
             let start = idx * SS_PER_CACHELINE;
             let end = start + SS_PER_CACHELINE;
 
-            if end < N {
-                let span: &[Q; SS_PER_CACHELINE] = unsafe {
-                    let unsized_ptr = &ss_arr[start..end] as *const [Q];
-                    let sized_ptr = unsized_ptr as *const [Q; SS_PER_CACHELINE];
+            lines[idx] = if end < N {
+                let span: &[&str; SS_PER_CACHELINE] = unsafe {
+                    let unsized_ptr = &ss_arr[start] as *const &str;
+                    let resized_ptr = core::ptr::slice_from_raw_parts(unsized_ptr, SS_PER_CACHELINE);
+                    let sized_ptr = resized_ptr as *const [&str; SS_PER_CACHELINE];
                     &*sized_ptr
                 };
 
                 Ok(SSCacheLine::new(span))
             } else {
-                let line: [Result<SmallString>; SS_PER_CACHELINE] = core::array::from_fn(|i| {
-                    ss_arr
-                        .get(i)
-                        .map_or_else(|| unsafe { Ok(SmallString::empty()) }, SmallString::new)
+                let mut line: [Result<MaybeUninit<SmallString>>; SS_PER_CACHELINE] = unsafe {
+                    core::mem::zeroed()
+                };
+
+                const_loop_range!(0; i < SS_PER_CACHELINE; {
+                    line[i] = if start + i >= N {
+                        Ok(MaybeUninit::zeroed())
+                    } else {
+                        SmallString::new(ss_arr[start + i])
+                    };
                 });
 
-                for s in line.iter() {
-                    if let Err(e) = s {
-                        return Err(e.clone());
+                let line = const_map_collection!(line.map(r: [Result<MaybeUninit<SmallString>>; SS_PER_CACHELINE]) -> [MaybeUninit<SmallString>; SS_PER_CACHELINE] {
+                    if let Ok(s) = r {
+                        s
+                    } else if let Err(e) = r {
+                        ss_const_panic!("Failed to create an SSCacheLine: ", e);
+                    } else {
+                        unreachable!();
                     }
-                }
-
-                let line: [SmallString; SS_PER_CACHELINE] = line.map(|o| o.unwrap());
+                });
 
                 Ok(SSCacheLine(line, [0; SS_CACHELINE_PADDING]))
             }
         });
 
-        for line in lines.iter() {
-            if let Err(e) = line {
-                return Err(e.clone());
+        let lines = const_map_collection!(lines.map(r: [Result<SSCacheLine>; L]) -> [SSCacheLine; L] {
+            if let Ok(line) = r {
+                line
+            } else if let Err(e) = r {
+                ss_const_panic!("Failed to create an SSCacheLine: ", e);
+            } else {
+                unreachable!();
             }
-        }
-
-        let lines: [SSCacheLine; L] = lines.map(|o| o.unwrap());
+        });
 
         Ok(Self(lines, N))
     }
 
+    /// Total number of elements in the collection.
+    ///
+    /// Always returns the const generic `N`.
     #[inline]
     pub const fn size(&self) -> usize {
         N
     }
 
-    pub fn sort_with<F: Fn(&[u8; N], &[u8; N]) -> core::cmp::Ordering>(&mut self) {
-        // todo!()
+    pub const fn lookup_idx(&self, idx: usize) -> &MaybeUninit<SmallString> {
+        &self.0[idx / SS_PER_CACHELINE].0[idx % SS_PER_CACHELINE]
     }
 
+    /// Sorts the underlying array of small-strings in place using a comparison
+    /// function that takes two byte-array references and returns their ordering.
+    pub fn sort_with<F: Fn(&[u8; N], &[u8; N]) -> core::cmp::Ordering>(&mut self, _f: F) {
+        todo!()
+    }
+
+    /// Look up `q` by value and return its `&str` slice on success.
+    ///
+    /// Errors if:
+    /// - `q` is empty ([`StringEmpty`](SSErrorType)),
+    /// - `q.len() >= INLINE_CAPACITY` ([`StringTooBig`](SSErrorType)),
+    /// - no matching entry ([`MatchNotFound`](SSErrorType)).
     #[inline]
-    pub fn find<Q: core::borrow::Borrow<str>>(&self, q: Q) -> Result<&str> {
-        self.find_index(q).map(|idx| self[idx].as_str())
+    pub const fn find(&self, q: &str) -> Result<&str> {
+        const_map_result!([(let i = self.find_index(q)) => Result<&str>]: {
+            unsafe { self.lookup_idx(i).assume_init_ref().as_str_unchecked() }
+        })
     }
 
-    pub fn find_index<Q: core::borrow::Borrow<str>>(&self, q: Q) -> Result<usize> {
-        let s: &str = q.borrow();
+    /// Look up `q` by value and return its numeric index on success.
+    ///
+    /// Errors if:
+    /// - `q` is empty ([`StringEmpty`](SSErrorType)),
+    /// - `q.len() >= INLINE_CAPACITY` ([`StringTooBig`](SSErrorType)),
+    /// - no matching entry ([`MatchNotFound`](SSErrorType)).
+    pub const fn find_index(&self, s: &str) -> Result<usize> {
         let l = s.len();
 
         if l >= INLINE_CAPACITY {
@@ -164,15 +286,25 @@ impl<const N: usize, const L: usize> SmallStringCollection<N, L> {
         }
 
         // TODO: Use a more efficient algorithm for finding a matching small-string
-        (0..self.1)
-            .find(|&idx| self[idx].as_str() == s)
-            .ok_or(SSErrorType::MatchNotFound)
+        const_loop_range!(0; idx < self.1; {
+            let maybe = self.lookup_idx(idx);
+            let ss: &SmallString = unsafe { maybe.assume_init_ref() };
+            if ss.is_init() {
+                let ss_utf = unsafe { ss.as_str_unchecked() };
+                if matches!(compare!(ss_utf, s), core::cmp::Ordering::Equal) {
+                    return Ok(idx);
+                }
+            }
+        });
+
+        Err(SSErrorType::MatchNotFound)
     }
 }
 
 impl core::borrow::Borrow<str> for SmallString {
     fn borrow(&self) -> &str {
-        self.as_str()
+        self.as_str_maybe()
+            .expect("Tried to borrow &str from an uninitialized SmallString")
     }
 }
 
@@ -180,13 +312,12 @@ impl<const N: usize, const L: usize> core::ops::Index<usize> for SmallStringColl
     type Output = SmallString;
 
     fn index(&self, index: usize) -> &Self::Output {
-        assert!(
-            index < self.1,
-            "Cannot index a SmallStringCollection with length {} using index {}",
-            self.1,
-            index
-        );
-        &self.0[index / SS_PER_CACHELINE].0[index % SS_PER_CACHELINE]
+        unsafe {
+            let output =
+                self.0[index / SS_PER_CACHELINE].0[index % SS_PER_CACHELINE].assume_init_ref();
+            assert_ne!(output.0, 0, "Indexed SmallString is uninitialized!");
+            output
+        }
     }
 }
 
@@ -195,6 +326,29 @@ mod tests {
     use super::*;
 
     type SSC<const T: usize> = SmallStringCollection<T>;
+
+    mod const_tests {
+        use super::*;
+
+        mod static_tests {
+            use super::*;
+
+            const COL: SSC<3> = const_unwrap_result!(SSC::new(&["a", "b", "c"]));
+            const_assert_eq!(COL.0.len(), 1);
+            const_assert_eq!(COL.0[0].0.len(), 3);
+
+            // TODO: More const tests
+        }
+
+        mod dyn_tests {
+            // use super::*;
+
+            // const COL_CONTENTS: &str = include_str!("../const-test-strs.txt");
+            // const COL_LINES: [&str; const_str::chain! {}] = split_lines!(COL_CONTENTS);
+
+            // TODO: More const tests
+        }
+    }
 
     #[test]
     fn basics() {
@@ -220,10 +374,12 @@ mod tests {
         ));
 
         let long_string = "a".repeat(INLINE_CAPACITY + 1);
-        assert!(col.find(&long_string as &str).is_err());
+        assert!(col.find(&long_string).is_err());
         assert!(matches!(
-            col.find(long_string).unwrap_err(),
+            col.find(&long_string).unwrap_err(),
             SSErrorType::StringTooBig
         ));
+
+        // TODO: More tests
     }
 }
