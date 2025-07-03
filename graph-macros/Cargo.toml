@@ -9,8 +9,10 @@
 
 [dependencies]
     syn = { version = "2", features = ["full"] }
-    quote = "1"
+    proc-macro-error = "1.0.4"
+    macro_tools = "0.55.0"
     proc-macro2 = "1"
+    quote = "1"
 
 [lib]
     proc-macro = true
