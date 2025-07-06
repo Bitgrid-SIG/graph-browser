@@ -1,0 +1,16 @@
+&amp;
+&lt;
+&gt;
+&quot;
+&apos;
+&nbsp;
+&ndash;
+&mdash;
+&copy;
+&reg;
+&trade;
+&asymp;
+&ne;
+&pound;
+&euro;
+&deg;

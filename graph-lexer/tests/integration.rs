@@ -1,4 +1,4 @@
-extern crate graph_lexer as lexer; ***REMOVED***
+extern crate graph_lexer as lexer;
 use lexer::{Lexer, TokenKind, ErrorLexer};
 
 #[test]
