@@ -153,6 +153,26 @@ impl TokenKind {
     pub fn discriminant(&self) -> Option<TokenKindDiscriminant> {
         self.try_into().ok()
     }
+
+    #[inline]
+    pub fn range(&self) -> Option<&::core::ops::Range<usize>> {
+        match self {
+            TokenKind::SOI => None,
+            TokenKind::Word(range) => Some(range),
+            TokenKind::Number(range) => Some(range),
+            TokenKind::Whitespace(range) => Some(range),
+            TokenKind::Symbol(_) => None,
+            TokenKind::EOI => None,
+        }
+    }
+
+    #[inline]
+    pub fn symbol(&self) -> Option<char> {
+        match self {
+            TokenKind::Symbol(c) => Some(*c),
+            _ => None,
+        }
+    }
 }
 
 impl ::core::fmt::Display for ErrorLexer {
